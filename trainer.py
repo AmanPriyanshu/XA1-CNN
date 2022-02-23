@@ -3,6 +3,7 @@ from dataloader import MovieDataset
 from model import XA1CNN
 from tqdm import tqdm
 from matplotlib import pyplot as plt
+import pandas as pd
 
 def test(model, test_dataloader, criterion, epoch):
 	model.eval()
@@ -20,12 +21,14 @@ def test(model, test_dataloader, criterion, epoch):
 		running_acc += acc.item()
 		bar.set_description(str({"mode":"VALIDATION", "epoch": epoch+1, "loss": round(running_loss/(batch_idx+1), 4), "acc": round(running_acc/(batch_idx+1), 4)}))
 	bar.close()
+	return running_loss/(batch_idx+1), running_acc/(batch_idx+1)
 
 def train(train_dataloader, test_dataloader, epochs=100):
 	model = XA1CNN(md.get_vocab_length(), md.max_len, 64)
 	optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
 	criterion = torch.nn.BCELoss()
-	progress= {"epoch": [], "loss": [], "acc": []}
+	progress= {"epoch": [], "loss": [], "acc": [], "test_loss": [], "test_acc": []}
+	max_acc = None
 	for epoch in range(epochs):
 		model.train()
 		running_loss, running_acc = 0, 0
@@ -48,8 +51,13 @@ def train(train_dataloader, test_dataloader, epochs=100):
 		progress["loss"].append(running_loss/(batch_idx+1))
 		progress["acc"].append(running_acc/(batch_idx+1))
 		bar.close()
-		test(model, test_dataloader, criterion, epoch)
-	torch.save(model.state_dict(), "./models/model.pt")
+		test_loss, test_acc = test(model, test_dataloader, criterion, epoch)
+		progress["test_loss"].append(test_loss)
+		progress["test_acc"].append(test_acc)
+		if max_acc is None or max_acc<test_acc:
+			max_acc = test_acc
+			torch.save(model.state_dict(), "./models/best_model.pt")
+	torch.save(model.state_dict(), "./models/last_epoch_model.pt")
 	progress = pd.DataFrame(progress)
 	progress.to_csv("progress.csv", index=False)
 
